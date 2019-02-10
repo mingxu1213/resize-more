@@ -1,0 +1,116 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include "bmp.h"
+
+int main (int args, char * argv[])
+{
+    if(args != 4)
+    {
+        fprintf(stderr, "11Usage: ./resize f infile outfile");
+        return 2;
+    }
+    double size = strtof(argv[1], NULL);
+    if(0 > size || size > 100)
+    {
+        fprintf(stderr, "22Usage: ./resize f infile outfile");
+        return 2;
+    }
+    FILE * readFile = fopen(argv[2], "r");
+    if(readFile == NULL)
+    {
+        fprintf(stderr, "33Usage: ./resize f infile outfile");
+        return 2;
+    }
+    FILE * writeFile = fopen(argv[3], "w");
+    if(writeFile == NULL)
+    {
+        fprintf(stderr, "44Usage: ./resize f infile outfile");
+        fclose(readFile);
+        return 2;
+    }
+    BITMAPFILEHEADER BF;
+    BITMAPINFOHEADER BI;
+    fread(&BF, sizeof(BITMAPFILEHEADER), 1, readFile);
+    fread(&BI, sizeof(BITMAPINFOHEADER), 1, readFile);
+    if((BF.bfType != 0x4d42) || (BF.bfOffBits != 54) || (BI.biSize != 40) || (BI.biBitCount != 24) || (BI.biCompression != 0))
+    {
+        fprintf(stderr, "55Usage: ./resize f infile outfile");
+        fclose(readFile);
+        fclose(writeFile);
+        return 2;
+    }
+    // original bmp file parameters. padding, width, height
+    int oldPadding = (4 - (BI.biWidth * sizeof(RGBTRIPLE) % 4)) % 4;
+    int originalWidth = BI.biWidth; 
+    int originalHeight = BI.biHeight;
+    // new bmp file parameters.
+    BI.biWidth = (int)(round (BI.biWidth * size));
+    BI.biHeight = (int)(round (BI.biHeight * size));
+    int newPadding = (4 - (BI.biWidth * sizeof(RGBTRIPLE) % 4)) % 4;
+    //new bmp file bisizeimage, bfsize
+    BI.biSizeImage = abs(BI.biHeight) * (BI.biWidth * sizeof(RGBTRIPLE) + newPadding);
+    BF.bfSize = BI.biSizeImage + 54;
+    fwrite(&BF, sizeof(BITMAPFILEHEADER), 1, writeFile);
+    fwrite(&BI, sizeof(BITMAPINFOHEADER), 1, writeFile);
+    // if the output file size is smaller than original bmp document
+    if(size < 1)
+    {
+        for(int i = 0, height = abs(BI.biHeight); i < height; i++)
+        {
+            for(int j = 0; j < originalWidth; j++)
+            {
+                RGBTRIPLE ptr;
+                fread(&ptr, sizeof(RGBTRIPLE), 1, readFile);
+                if(j % (int)(round(1 / size)) == 0)
+                {
+                    fwrite(&ptr, sizeof(RGBTRIPLE), 1, writeFile);
+                }
+            }
+            fseek(readFile, oldPadding, SEEK_CUR);
+            for(int q = 0, w = (int)(round(1 / size)); q < w; q++)
+            {
+                fseek(readFile, BI.biWidth * sizeof(RGBTRIPLE) + oldPadding, SEEK_CUR);
+            }
+            for(int x = 0; x < newPadding; x++)
+            {
+                fputc(0x00, writeFile);
+            }
+        }
+        fclose(readFile);
+        fclose(writeFile);
+        return 0;
+    }
+    //if size > 1
+    else
+    {
+        for(int i = 0, height = abs(originalHeight); i < height; i++)
+        {
+            for(int s = 0; s < size; s++)
+            {
+                for(int j = 0; j < originalWidth; j++)
+                {
+                    RGBTRIPLE ptr;
+                    fread(&ptr, sizeof(RGBTRIPLE), 1, readFile);
+                    for(int x = 0; x < size; x++)
+                    {
+                        fwrite(&ptr, sizeof(RGBTRIPLE), 1, writeFile);
+                    }
+                }
+                for(int q = 0; q < newPadding; q++)
+                {
+                    fputc(0x00, writeFile);
+                }
+                if(s < size - 1)
+                {
+                    fseek(readFile, -originalWidth * sizeof(RGBTRIPLE), SEEK_CUR);
+                }
+
+            }
+            fseek(readFile, oldPadding, SEEK_CUR);
+        }
+        fclose(readFile);
+        fclose(writeFile);
+        return 0;
+    }
+}
